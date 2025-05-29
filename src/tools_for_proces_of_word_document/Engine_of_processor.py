@@ -1,21 +1,29 @@
+import asyncio
 import re
 import time
 
+import requests
 from docx import Document
 from docx.text.paragraph import Paragraph
 import pathlib
 import tqdm
 
+import urllib3
+
+from src.tools_for_interface_of_gigachat.Engine_of_interface import set_interface_for_job, EngineOfGigaChatInterface
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 class WordProcessor:
     def __init__(self, path_to_document: pathlib.Path):
         self.path_to_document = path_to_document
-        assert path_to_document.exists()
+        assert path_to_document.exists(), 'Не существует данного файла'
 
         self.document = Document(self.path_to_document.__str__())
-        self.delete_empy_paragraphs()
+        self.delete_empty_paragraphs()
         self.count_of_paragraphs_to_modify = self.get_count_of_caption_text()
-        assert self.count_of_paragraphs_to_modify != 0
+        assert self.count_of_paragraphs_to_modify != 0, 'Файл не может быть обработан.'
 
     def get_count_of_caption_text(self) -> int:
         count: int = 0
@@ -34,20 +42,31 @@ class WordProcessor:
                 return True
         return False
 
-    def process_paragraphs(self):
+    def run_case(self):
+        with requests.Session() as session:
+            engine = set_interface_for_job(session)
+            try:
+                self.process_paragraphs(engine)
+            finally:
+                self.document.save(self.path_to_document.__str__())
+
+    def process_paragraphs(self, engine: EngineOfGigaChatInterface):
         with tqdm.tqdm(total=self.count_of_paragraphs_to_modify) as t:
             t.set_description('Количество параграфов')
             for i, paragraph in enumerate(self.document.paragraphs):
-                if self.check_paragraph_on_suitability(paragraph, i):
-                    # использовать self.document.paragraphs[i+1].text
-                    t.update()
+                self.process_paragraph(engine, t, i, paragraph)
 
-    def delete_empy_paragraphs(self):
+    def process_paragraph(self, engine: EngineOfGigaChatInterface, t: tqdm.tqdm, i: int, paragraph: Paragraph):
+        if self.check_paragraph_on_suitability(paragraph, i):
+            # использовать self.document.paragraphs[i+1].text
+            time.sleep(1)
+            text_from_model = engine.post_message_into_gigachat(self.document.paragraphs[i+1].text)
+            self.document.paragraphs[i+1].runs[0].text = text_from_model
+
+            t.update()
+
+    def delete_empty_paragraphs(self):
         for paragraph in list(self.document.paragraphs):
             if paragraph.text.strip() == '':
                 paragraph._element.getparent().remove(paragraph._element)
         self.document.save(self.path_to_document.__str__())
-
-
-processor = WordProcessor(pathlib.Path('/Users/egor/PycharmProjects/AutoWriterReports/USMT.docx'))
-processor.process_paragraphs()
