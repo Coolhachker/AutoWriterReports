@@ -37,9 +37,10 @@ class WordProcessor:
         return paragraph.runs and any(run._element.xpath('.//pic:pic') for run in paragraph.runs)
 
     def check_paragraph_on_suitability(self, paragraph: Paragraph, i: int) -> bool:
-        if re.search('^рисунок \d+', paragraph.text.lower().strip()) is not None:
-            if i + 1 < len(self.document.paragraphs) and re.search('^рисунок \d+', self.document.paragraphs[i+1].text.lower().strip()) is None:
-                return True
+        if re.search('^рисунок', paragraph.text.lower().strip()) is not None:
+            if i + 1 < len(self.document.paragraphs):
+                if re.search('^рисунок', self.document.paragraphs[i+1].text.lower().strip()) is None:
+                    return True
         return False
 
     def run_case(self):
@@ -67,6 +68,6 @@ class WordProcessor:
 
     def delete_empty_paragraphs(self):
         for paragraph in list(self.document.paragraphs):
-            if paragraph.text.strip() == '':
+            if paragraph.text.strip() == '' and len(paragraph.runs) == 0:
                 paragraph._element.getparent().remove(paragraph._element)
         self.document.save(self.path_to_document.__str__())
